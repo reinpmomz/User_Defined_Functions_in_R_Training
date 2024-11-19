@@ -1,0 +1,454 @@
+---
+title: "User Defined Functions - Demo"
+author: "Reinpeter"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: yes
+    toc_depth: 2 
+    number_sections: yes
+  pdf_document:
+    toc: yes
+    toc_depth: 4
+    number_sections: yes
+  html_document:
+    toc: yes
+    toc_depth: 4
+    number_sections: yes
+---
+
+# **Introduction**
+
+## Setup
+
+```{r global setup, include=FALSE, results = "hide"}
+
+## Set global Chunk requirements
+knitr::opts_chunk$set(#include = TRUE,
+                      echo=FALSE, message = FALSE, warning = FALSE, dpi = 300,
+                      fig.height=8.5, fig.width=10.5, out.height="120%", out.width="110%"
+                      )
+
+```
+
+```{r start with a clean environment, include=FALSE, results = "hide"}
+### Restart R
+#.rs.restartR()
+
+### Start with a clean environment by removing objects in workspace
+rm(list=ls())
+
+```
+
+```{r setting working directory, include=FALSE, results = "hide"}
+
+### Setting work directory
+working_directory <- base::setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#working_directory <- base::setwd(".")
+
+```
+
+```{r setting output folder, include=FALSE, results = "hide"}
+
+### Setting output folder
+mainDir <- base::getwd()
+subDir_output <- "Output"
+
+output_Dir <- base::file.path(mainDir, subDir_output)
+
+
+### check if output folder exists
+base::ifelse(!base::dir.exists(output_Dir), base::dir.create(output_Dir), "Sub Directory exists")
+
+```
+
+
+## Load required packages
+
+```{r loading relevant packages, include=FALSE, results = "hide"}
+
+## Install required packages
+
+### Install CRAN packages
+required_packages <- c("tidyverse", "janitor", "knitr", "kableExtra", "lubridate", "gtsummary", "flextable", "officer",
+                       "labelled", "sjlabelled", "tibble", "readxl", "writexl", "scales", "gridExtra", "ggstats"
+                       )
+
+installed_packages <- required_packages %in% base::rownames(utils::installed.packages())
+
+if (base::any(installed_packages==FALSE)) {
+  utils::install.packages(required_packages[!installed_packages]
+                          #, repos = "http://cran.us.r-project.org"
+                          )
+}
+
+### load libraries
+base::invisible(base::lapply(required_packages, library, character.only=TRUE))
+
+```
+
+
+# **User Defined functions**
+
+## Helper/customized functions
+
+```{r loading user defined functions, include=FALSE, results = "hide"}
+
+### Visualization Functions 
+source("helperfuns_ggplot_themes.R")
+source("helperfuns_simple_plots.R")
+source("helperfuns_stack_plots.R")
+source("helperfuns_grouped_line_plots.R")
+
+### Summary table Functions
+source("helperfuns_gt_summary_themes.R")
+source("helperfuns_table_summary_categorical.R")
+
+```
+
+
+## Load Data
+
+```{r load package datasets, include=FALSE, results = "hide"}
+
+#data() ##list and view the data sets in all *available* packages
+
+df_1 <- datasets::iris %>%
+  tibble::as_tibble()
+
+df_2 <- forcats::gss_cat
+
+df_3 <- lubridate::lakers %>%
+  tibble::as_tibble() #Lakers 2008-2009 basketball data set
+
+df_4 <- datasets::mtcars %>%
+  tibble::as_tibble() %>%
+  tibble::rownames_to_column(var = "car_brand") %>%
+  dplyr::mutate(vs = ifelse(vs == 0, "V-shaped",
+                             ifelse(vs == 1, "Straight", vs
+                                     )
+                             )
+                , am = ifelse(am == 0, "Automatic",
+                               ifelse(am == 1, "Manual", am
+                                       )
+                               )
+                , across(c(cyl, vs, am), ~as.factor(.x))
+                ) %>%
+  labelled::set_variable_labels(#labeling variables
+    mpg = "Miles/(US) gallon"
+    , cyl = "Number of cylinders"
+    , disp = "Displacement (cu.in.)"
+    , hp = "Gross horsepower"
+    , drat = "Rear axle ratio"
+    , wt = "Weight (1000 lbs)"
+    , qsec = "1/4 mile time"
+    , vs = "Engine shape"
+    , am = "Transmission"
+    , gear = "Number of forward gears"
+    , carb = "Number of carburetors"
+    )
+
+```
+
+
+# **Analysis**
+
+## Visualization - bargraph/histogram
+
+```{r bargraphs/histogram}
+
+ggtheme_descriptive_plot()
+### bar graph and histogram
+
+plot_1 <- simple_plot(df = df_1
+                      , variable = "Species"
+                      #, bar_fill_colour = GREEN3
+                     )
+plot_1
+
+plot_2 <- simple_plot(df = df_1
+                      , variable = "Sepal.Length"
+                      , histogram = TRUE
+                     )
+plot_2
+
+### List bar graph and histogram
+plot_3 <- sapply(names(df_1), function(x){
+  simple_plot(df = df_1
+              , variable = x
+              )
+  }, simplify = FALSE)
+
+plot_3
+
+plot_3_merge <- do.call(gridExtra::grid.arrange, c(plot_3, list(ncol = 3, nrow = NULL))
+                  )
+
+### Grids - bar graph and histogram
+plot_4 <- simple_plot_grid( df = df_1
+                            , vars = c("Species", "Sepal.Length")
+                            #, bar_fill_colour = GREEN3
+                            , grid_ncol = 2
+                          )
+
+### Saving descriptive simple plots 
+
+#### using loops for lists
+for (i in seq(length(plot_3))) {
+  ggsave(plot=plot_3[[i]], height = 7, width = 12,
+         filename = paste0("descriptive_plot_",names(plot_3)[[i]],".png"),
+         path = output_Dir, bg='white')  
+}
+
+#### Grid plot
+ggsave(plot=plot_3_merge, height = 7, width = 12,
+         filename = "descriptive_plot_grid.png",
+         path = output_Dir, bg='white')
+
+
+```
+
+## Visualization - Stacked plots
+
+```{r stacked plots}
+
+### Single variable stack plot
+plot_5 <- df_4 %>%
+  stacked_plot(variable = "cyl"
+               , fill_var = "vs"
+              )
+plot_5
+
+### Multiple variable stack plots
+plot_6 <- df_4 %>%
+  stacked_plot_grid(vars = c("cyl", "am", "hp")
+                    , fill_var = "vs"
+                    , grid_ncol =  3
+                    )
+
+
+```
+
+
+## Visualization - Grouped line plots
+
+```{r grouped line plots}
+
+ggtheme_descriptive_plot(angletext_xaxis=90)
+### count number of times a player has played in a month per game_type
+plot_7 <- df_3 %>%
+  dplyr::mutate(date_new = lubridate::ymd(date)
+                , month_date = lubridate::floor_date(date_new, unit = "month")
+                ) %>%
+  dplyr::filter(player %in% c("Kobe Bryant", "Pau Gasol", "Lamar Odom", "Andrew Bynum")) %>%
+  dplyr::distinct(month_date, opponent, player, game_type, .keep_all = TRUE) %>%
+  line_group_count_grid_plot(x_vars = "month_date"
+                             , colour_vars = "game_type"
+                             , x_axis_min_max_break_months = 1
+                             , title_label = FALSE
+                             , x_label = "Months"
+                             , y_label = "No. of Games Played"
+                             , facet_vars= "player"
+                             , facet_wrap=TRUE
+                             , facet_ncol = 4
+                             , facet_scales = "free_x"
+                             )
+
+### number of points made scored by a player in a month per game_type
+plot_8 <- df_3 %>%
+  dplyr::mutate(date_new = lubridate::ymd(date)
+                , month_date = lubridate::floor_date(date_new, unit = "month")
+                ) %>%
+  dplyr::filter(player %in% c("Kobe Bryant", "Pau Gasol", "Lamar Odom", "Andrew Bynum"), result == "made") %>%
+  line_group_sum_mean_grid_plot(x_vars = "month_date"
+                                , y_vars = "points"
+                                , colour_vars = "game_type"
+                                , stat_fun_sum = TRUE,
+                                , x_axis_min_max_break_months = 1
+                                , title_label = FALSE
+                                , x_label = "Months"
+                                , y_label = "Total Points scored"
+                                , facet_vars= "player"
+                                , facet_wrap=TRUE
+                                , facet_ncol = 4
+                                , facet_scales = "free_x"
+                                )
+
+### number of average points made scored by a player in a month per game_type
+plot_9 <- df_3 %>%
+  dplyr::mutate(date_new = lubridate::ymd(date)
+                , month_date = lubridate::floor_date(date_new, unit = "month")
+                ) %>%
+  dplyr::filter(player %in% c("Kobe Bryant", "Pau Gasol", "Lamar Odom", "Andrew Bynum"), result == "made") %>%
+  dplyr::select(month_date, player, game_type, opponent, points) %>%
+  dplyr::group_by(month_date, player, game_type, opponent) %>%
+  dplyr::summarise(points = sum(points), .groups = "drop") %>%
+  line_group_sum_mean_grid_plot(x_vars = "month_date"
+                                , y_vars = "points"
+                                , colour_vars = "game_type"
+                                , stat_fun_sum = FALSE,
+                                , x_axis_min_max_break_months = 1
+                                , title_label = FALSE
+                                , x_label = "Months"
+                                , y_label = "Average Points scored per game"
+                                , facet_vars= "player"
+                                , facet_wrap=TRUE
+                                , facet_ncol = 4
+                                , facet_scales = "free_x"
+                                )
+
+
+```
+
+## Descriptive summary
+
+```{r set gt summary theme, include=FALSE, results = "hide"}
+
+my_gtsummary_theme
+gtsummary_compact_theme
+
+```
+
+
+```{r descriptives}
+table_1 <- descriptive_table(df = df_2 %>% dplyr::filter(year < 2006)
+                             , include_vars = names(df_2)[!names(df_2) %in% "denom"]
+                             #, foot_note = NULL #default
+                             #, flex_table = TRUE #default
+                             #, ci = FALSE #default
+                             )
+
+table_1
+
+table_2 <- df_2 %>%
+  dplyr::filter(year < 2006) %>%
+  dplyr::mutate(across(where(is.factor),  ~forcats::fct_drop(.x )) #drop unused factor levels)
+                ) %>%
+    labelled::set_variable_labels(#labeling variables
+      year = "Year of survey"
+      , age = "Age (Years)"
+      , marital = "Marital status"
+      , race = "Race"
+      , rincome = "Reported Income"
+      , partyid = "Party Affiliation"
+      , relig = "Religion"
+      , tvhours = "Hours per day watching tv"
+    ) %>%
+  descriptive_table(include_vars = names(df_2)[!names(df_2) %in% "denom"]
+                    , foot_note = "n (%); Mean (SD); Median (IQR); Range"
+                    )
+
+table_2
+
+```
+
+
+## Inferential summary - Categorical
+
+```{r inferential statistics}
+
+table_3 <- df_2 %>%
+  dplyr::filter(year < 2006) %>%
+  dplyr::mutate(across(where(is.factor),  ~forcats::fct_drop(.x )) #drop unused factor levels)
+                , year = as.factor(year)
+                ) %>%
+    labelled::set_variable_labels(#labeling variables
+      year = "Year of survey"
+      , age = "Age (Years)"
+      , marital = "Marital status"
+      , race = "Race"
+      , rincome = "Reported Income"
+      , partyid = "Party Affiliation"
+      , relig = "Religion"
+      , tvhours = "Hours per day watching tv"
+    ) %>%
+  categorical_inferential_table(by_vars = "year"
+                                #, percent = "column" #default
+                                , include_vars = names(df_2)[!names(df_2) %in% "denom"]
+                                , overall = TRUE
+                                #, p_value = TRUE #default
+                                #, flex_table = TRUE #default
+                                )
+
+table_3
+
+### Saving the flextable summary output
+
+flextable::save_as_docx(values = table_3, 
+                        path = base::file.path(output_Dir, "inferential_stats.docx"),
+                        align = "center", #left, center (default) or right.
+                        pr_section = officer::prop_section(
+                          page_size = officer::page_size(orient = "landscape"), #Use NULL (default value) for no content.
+                          page_margins = officer::page_mar(), #Use NULL (default value) for no content.
+                          type = "nextPage", # "continuous", "evenPage", "oddPage", "nextColumn", "nextPage"
+                          section_columns = NULL, #Use NULL (default value) for no content.
+                          header_default = NULL, #Use NULL (default value) for no content.
+                          header_even = NULL, #Use NULL (default value) for no content.
+                          header_first = NULL, #Use NULL (default value) for no content.
+                          footer_default = NULL, #Use NULL (default value) for no content.
+                          footer_even = NULL, #Use NULL (default value) for no content.
+                          footer_first = NULL #Use NULL (default value) for no content.
+                          )
+                        )
+
+```
+
+
+## Merge Descriptive and Inferential summary - Categorical
+
+```{r}
+
+table_4 <- descriptive_table(df = df_2 %>% dplyr::filter(year < 2006)
+                             , include_vars = names(df_2)[!names(df_2) %in% "denom"]
+                             #, foot_note = NULL #default
+                             , flex_table = FALSE
+                             #, ci = FALSE #default
+                             )
+
+
+table_5 <- df_2 %>%
+  dplyr::filter(year < 2006) %>%
+  dplyr::mutate(across(where(is.factor),  ~forcats::fct_drop(.x )) #drop unused factor levels)
+                , year = as.factor(year)
+                ) %>%
+  categorical_inferential_table(by_vars = "year"
+                                #, percent = "column" #default
+                                , include_vars = names(df_2)[!names(df_2) %in% "denom"]
+                                #, overall = FALSE #default
+                                #, p_value = TRUE #default
+                                , flex_table = FALSE
+                                )
+
+
+table_4_5_merge <- gtsummary::tbl_merge(tbls= c(list(table_4),table_5),
+                                        tab_spanner = NULL
+                                        ) %>%
+      gtsummary::as_flex_table()
+
+table_4_5_merge
+
+
+### Saving the flextable summary output
+
+flextable::save_as_docx(table_4_5_merge, 
+                        path = base::file.path(output_Dir, "descriptive_inferential_stats.docx"),
+                        align = "center", #left, center (default) or right.
+                        pr_section = officer::prop_section(
+                          page_size = officer::page_size(orient = "landscape"), #Use NULL (default value) for no content.
+                          page_margins = officer::page_mar(), #Use NULL (default value) for no content.
+                          type = "nextPage", # "continuous", "evenPage", "oddPage", "nextColumn", "nextPage"
+                          section_columns = NULL, #Use NULL (default value) for no content.
+                          header_default = NULL, #Use NULL (default value) for no content.
+                          header_even = NULL, #Use NULL (default value) for no content.
+                          header_first = NULL, #Use NULL (default value) for no content.
+                          footer_default = NULL, #Use NULL (default value) for no content.
+                          footer_even = NULL, #Use NULL (default value) for no content.
+                          footer_first = NULL #Use NULL (default value) for no content.
+                          )
+                        )
+
+
+```
+
+
+
